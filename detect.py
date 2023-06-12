@@ -6,6 +6,11 @@ import cv2
 import torch
 import torch.backends.cudnn as cudnn
 from numpy import random
+try:
+    from PIL import Image
+except ImportError:
+    import Image
+import pytesseract
 
 from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages
@@ -14,6 +19,17 @@ from utils.general import check_img_size, check_requirements, check_imshow, non_
 from utils.plots import plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
 
+def perform_ocr(image):
+    # Convert image to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Apply thresholding to segment the text
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    # Perform OCR using Tesseract
+    ocr_text = pytesseract.image_to_string(thresh)
+    print("\n ocr text="+ocr_text+"\n")
+    return ocr_text
 
 def detect(save_img=False):
     source, weights, view_img, save_txt, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace
@@ -128,6 +144,14 @@ def detect(save_img=False):
                         label = f'{names[int(cls)]} {conf:.2f}'
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
 
+                        # OCR
+                        # Perform OCR on the detected bounding box region
+                        cropped_img = im0[int(xyxy[1]):int(xyxy[3]), int(xyxy[0]):int(xyxy[2])]
+                        ocr_text = perform_ocr(cropped_img)
+                        
+                        # Display OCR text above the bounding box
+                        cv2.putText(im0, ocr_text, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
+
             # Print time (inference + NMS)
             print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
 
@@ -175,22 +199,18 @@ if __name__ == '__main__':
     parser.add_argument('--save-txt', action='store_true', help='save results to *.txt')
     parser.add_argument('--save-conf', action='store_true', help='save confidences in --save-txt labels')
     parser.add_argument('--nosave', action='store_true', help='do not save images/videos')
-    parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --class 0, or --class 0 2 3')
+    parser.add_argument('--classes', nargs='+', type=int, help='filter by class')
     parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
     parser.add_argument('--augment', action='store_true', help='augmented inference')
-    parser.add_argument('--update', action='store_true', help='update all models')
     parser.add_argument('--project', default='runs/detect', help='save results to project/name')
     parser.add_argument('--name', default='exp', help='save results to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
-    parser.add_argument('--no-trace', action='store_true', help='don`t trace model')
+    parser.add_argument('--no-trace', action='store_true', help='do not trace model')
     opt = parser.parse_args()
     print(opt)
-    #check_requirements(exclude=('pycocotools', 'thop'))
+    check_requirements(exclude=('tensorboard', 'pycocotools', 'thop'))
 
     with torch.no_grad():
-        if opt.update:  # update all models (to fix SourceChangeWarning)
-            for opt.weights in ['yolov7.pt']:
-                detect()
-                strip_optimizer(opt.weights)
-        else:
-            detect()
+        if opt.view_img:
+            cv2.namedWindow('img', cv2.WINDOW_NORMAL)  # OpenCV window size needs to be adjusted for each image
+        detect()
