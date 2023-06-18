@@ -1,6 +1,7 @@
 import argparse
 import time
 from pathlib import Path
+from paddleocr import PaddleOCR,draw_ocr
 
 import cv2
 import torch
@@ -10,8 +11,8 @@ try:
     from PIL import Image
 except ImportError:
     import Image
-import pytesseract
 
+from google.colab.patches import cv2_imshow
 from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages
 from utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression, apply_classifier, \
@@ -19,17 +20,40 @@ from utils.general import check_img_size, check_requirements, check_imshow, non_
 from utils.plots import plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
 
-def perform_ocr(image):
+
+def perform_ocrAyazSingletext(image):
     # Convert image to grayscale
+    ocr = PaddleOCR(use_angle_cls=True, lang='en')
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Apply thresholding to segment the text
-    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    #imS = gray
+    imS=image
+    print('Before Detect..')
+    # Detect the faces
 
-    # Perform OCR using Tesseract
-    ocr_text = pytesseract.image_to_string(thresh)
-    print("\n ocr text="+ocr_text+"\n")
-    return ocr_text
+    result = ocr.ocr(imS)
+
+    if not result:  # Check if result is empty
+        print('No text detected.')
+        # return 'No text detected.'
+    else:
+        # boxes = [line[0] for line in result]
+        txts1 = [line[0][1][0] for line in result]
+        # scores = [line[0][1] for line in result]
+        finaltext = ''
+        
+        for line in txts1:
+             print( line )
+        #     finaltext = line
+
+    # return finaltext
+
+
+img = cv2.imread('op.jpeg')
+
+cv2_imshow(img)
+
+perform_ocrAyazSingletext(img)
 
 def detect(save_img=False):
     source, weights, view_img, save_txt, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace
@@ -147,7 +171,7 @@ def detect(save_img=False):
                         # OCR
                         # Perform OCR on the detected bounding box region
                         cropped_img = im0[int(xyxy[1]):int(xyxy[3]), int(xyxy[0]):int(xyxy[2])]
-                        ocr_text = perform_ocr(cropped_img)
+                        ocr_text = perform_ocrAyazSingletext(cropped_img)
                         
                         # Display OCR text above the bounding box
                         cv2.putText(im0, ocr_text, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
